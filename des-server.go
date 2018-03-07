@@ -3,31 +3,83 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"strings"
 )
 
-func logRequest(r *http.Request) {
-	fmt.Println("REQUEST:", r.URL.Path)
-	//fmt.Println(r.Form)
-	//fmt.Println("path", r.URL.Path)
-	//fmt.Println("scheme", r.URL.Scheme)
-	for k, v := range r.Form {
-		fmt.Println("key:", k)
-		fmt.Println("val:", strings.Join(v, ""))
+func dumpLine(data []byte, len int, addr int) {
+	var i int
+
+	fmt.Printf("%08x |", addr)
+
+	for i = 0; i < len; i++ {
+		fmt.Printf("%02x ", data[i])
+	}
+	for ; i < 16; i++ {
+		fmt.Printf("   ")
+	}
+	fmt.Printf("| ")
+
+	for i = 0; i < len; i++ {
+		if data[i] >= 32 && data[i] < 0x7f {
+			fmt.Printf("%c", data[i])
+		} else {
+			fmt.Printf(".")
+		}
+	}
+	for ; i < 16; i++ {
+		fmt.Printf(" ")
+	}
+	fmt.Printf(" |\n")
+}
+
+func dumpReader(r io.Reader) {
+	data := make([]byte, 1024, 1024)
+	line := make([]byte, 16, 16)
+	lineLen := 0
+	lineAddr := 0
+	for {
+		n, _ := r.Read(data)
+		if n == 0 {
+			break
+		}
+		for i := 0; i < n; {
+			for i < n && lineLen < 16 {
+				line[lineLen] = data[i]
+				lineLen++
+				i++
+			}
+			if lineLen == 16 {
+				dumpLine(line, lineLen, lineAddr)
+				lineAddr += lineLen
+				lineLen = 0
+			}
+		}
+	}
+
+	if lineLen > 0 {
+		dumpLine(line, lineLen, lineAddr)
 	}
 }
 
+func logRequest(r *http.Request) {
+	fmt.Printf("\n--- %s %s\n", r.Method, r.URL.Path)
+	for h, v := range r.Header {
+		fmt.Printf("%s: %s\n", h, v)
+	}
+
+	fmt.Printf("* body:\n")
+	dumpReader(r.Body)
+}
+
 func serveError(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
 	logRequest(r)
 	http.Error(w, "Unknown URL", http.StatusInternalServerError)
 }
 
 // serve the "Service Terminated" message
 func serveSSInfoClosed(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
 	logRequest(r)
 
 	resp := "<ss>9</ss>\n" +
@@ -44,7 +96,6 @@ func serveSSInfoClosed(w http.ResponseWriter, r *http.Request) {
 
 // serve the URL of the actual game server
 func serveSSInfoOpen(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
 	logRequest(r)
 
 	resp := "<ss>0</ss>\n" +
@@ -77,7 +128,6 @@ func serveSSInfoOpen(w http.ResponseWriter, r *http.Request) {
 
 // initial login request
 func serveCgiBinLogin(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
 	logRequest(r)
 
 	header := []byte{0x01, 0xF4, 0x02, 0x00, 0x00, 0x01, 0x01}
@@ -94,11 +144,18 @@ func serveCgiBinLogin(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%s\n", base64.StdEncoding.EncodeToString(data))
 }
 
+func serveTest(w http.ResponseWriter, r *http.Request) {
+	logRequest(r)
+	fmt.Fprintf(w, "<html><body><form method=\"post\" action=\"/test\"><textarea name=\"x\">"+
+		"</textarea><p><input type=\"submit\"></form></body></html>\n")
+}
+
 func main() {
 	http.HandleFunc("/demons-souls-us/ss.info", serveSSInfoOpen)
 	http.HandleFunc("/cgi-bin/login.spd", serveCgiBinLogin)
+	http.HandleFunc("/test", serveTest)
 	http.HandleFunc("/", serveError)
-	fmt.Println("Starting server...")
+	fmt.Printf("Starting server...\n")
 	err := http.ListenAndServe(":18000", nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
