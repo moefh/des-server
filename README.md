@@ -5,11 +5,11 @@ and maybe eventually write a replacement server.
 
 ## What is done so far
 
-This is a Go project in *very* early stages. This only works for the NA (Norht America)
+This is a Go project in *very* early stages. This only works for the NA (North America)
 version of Demon's Souls.  This is currently just [Asapin's proof-of-concept server](https://github.com/Asapin/ds-server-PoC),
-rewritten in Go and adapted to the NA Damon's Souls client. This means we're able to start
-an online session that is closed very shortly by the game client because the server doesn't
-reply to any requests beyond the initial login.
+rewritten in Go and adapted to NA. This means we're able to start an online session that
+is closed very shortly by the game client because the server doesn't reply to any requests
+beyond the initial login.
 
 ## How to setup/use this server
 
